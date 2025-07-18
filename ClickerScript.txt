@@ -1,0 +1,201 @@
+-- Made by mirai. Added comments to each bit to hopefully structure it so it is easy to comprehend for those who are new to scripting. Main game client logic for cookie clicker. Handles UI interactions, cookie clicking mechanics, shop purchases (grandmas, farms, click upgrades), achievement system, and communicates with server for data saving. Includes autogeneration from purchased upgrades and achievement tracking.
+
+local cookieButton = script.Parent
+local currencyLabel = cookieButton.Parent.CurrencyLabel
+local shopFrame = cookieButton.Parent.ShopFrame
+local grandmaButton = shopFrame.GrandmaButton
+local grandmaCount = shopFrame.GrandmaCount
+local clickUpgradeButton = shopFrame.ClickUpgradeButton
+local clickPowerCount = shopFrame.ClickPowerCount
+local farmButton = shopFrame.FarmButton
+local farmCount = shopFrame.FarmCount
+local achievementFrame = cookieButton.Parent.AchievementFrame
+local achievement1 = achievementFrame.Achievement1
+local achievement2 = achievementFrame.Achievement2
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+
+local saveDataEvent = ReplicatedStorage:WaitForChild("SaveDataEvent")
+local loadDataEvent = ReplicatedStorage:WaitForChild("LoadDataEvent")
+
+local cookies = 0
+local grandmas = 0
+local farms = 0
+local clickPower = 1
+local grandmaCost = 10
+local clickUpgradeCost = 50
+local farmCost = 200
+
+-- Achievement tracking
+local totalClicks = 0
+local totalCookiesEarned = 0
+local achievements = {
+    firstClick = false,
+    cookieCollector = false
+}
+
+-- Function to update the display
+local function updateDisplay()
+    currencyLabel.Text = "Cookies: " .. cookies
+    grandmaCount.Text = "Grandma's: " .. grandmas
+    farmCount.Text = "Farms: " .. farms
+    clickPowerCount.Text = "Click Power: " .. clickPower
+    grandmaButton.Text = "Grandma - Cost: " .. grandmaCost .. " cookies"
+    clickUpgradeButton.Text = "Click Power - Cost: " .. clickUpgradeCost .. " cookies"
+    farmButton.Text = "Farm - Cost: " .. farmCost .. " cookies"
+    
+    -- Update achievements
+    if achievements.firstClick then
+        achievement1.Text = "First Click (Click 1 time)"
+    else
+        achievement1.Text = "First Click (Click 1 time)"
+    end
+    
+    if achievements.cookieCollector then
+        achievement2.Text = "Cookie Collector (Earn 100 cookies)"
+    else
+        achievement2.Text = "Cookie Collector (Earn 100 cookies)"
+    end
+end
+
+-- Function to check achievements
+local function checkAchievements()
+    -- First Click achievement
+    if totalClicks >= 1 and not achievements.firstClick then
+        achievements.firstClick = true
+        cookies = cookies + 5 -- Bonus cookies!
+        print("Achievement unlocked: First Click! (+5 cookies)")
+    end
+    
+    -- Cookie Collector achievement
+    if totalCookiesEarned >= 100 and not achievements.cookieCollector then
+        achievements.cookieCollector = true
+        cookies = cookies + 25 -- Bonus cookies!
+        print("Achievement unlocked: Cookie Collector! (+25 cookies)")
+    end
+end
+
+-- Function to save data
+local function saveData()
+    local dataToSave = {
+        cookies = cookies,
+        grandmas = grandmas,
+        farms = farms,
+        clickPower = clickPower,
+        grandmaCost = grandmaCost,
+        clickUpgradeCost = clickUpgradeCost,
+        farmCost = farmCost,
+        totalClicks = totalClicks,
+        totalCookiesEarned = totalCookiesEarned,
+        achievements = achievements
+    }
+    saveDataEvent:FireServer(dataToSave)
+end
+
+-- Load data when received from server
+loadDataEvent.OnClientEvent:Connect(function(savedData)
+    cookies = savedData.cookies or 0
+    grandmas = savedData.grandmas or 0
+    farms = savedData.farms or 0
+    clickPower = savedData.clickPower or 1
+    grandmaCost = savedData.grandmaCost or 10
+    clickUpgradeCost = savedData.clickUpgradeCost or 50
+    farmCost = savedData.farmCost or 200
+    totalClicks = savedData.totalClicks or 0
+    totalCookiesEarned = savedData.totalCookiesEarned or 0
+    achievements = savedData.achievements or {firstClick = false, cookieCollector = false}
+    
+    updateDisplay()
+    
+    -- Show shop if player has enough cookies
+    if cookies >= 5 then
+        shopFrame.Visible = true
+    end
+end)
+
+-- When the cookie is clicked
+cookieButton.MouseButton1Click:Connect(function()
+    cookies = cookies + clickPower
+    totalClicks = totalClicks + 1
+    totalCookiesEarned = totalCookiesEarned + clickPower
+    
+    checkAchievements()
+    updateDisplay()
+    
+    -- Simple click animation
+    cookieButton.Size = UDim2.new(0, 180, 0, 180)
+    wait(0.1)
+    cookieButton.Size = UDim2.new(0, 200, 0, 200)
+    
+    -- Show shop when you have at least 5 cookies
+    if cookies >= 5 then
+        shopFrame.Visible = true
+    end
+end)
+
+-- When grandma button is clicked
+grandmaButton.MouseButton1Click:Connect(function()
+    if cookies >= grandmaCost then
+        cookies = cookies - grandmaCost
+        grandmas = grandmas + 1
+        grandmaCost = math.floor(grandmaCost * 1.5)
+        updateDisplay()
+        saveData()
+    end
+end)
+
+-- When click upgrade button is clicked
+clickUpgradeButton.MouseButton1Click:Connect(function()
+    if cookies >= clickUpgradeCost then
+        cookies = cookies - clickUpgradeCost
+        clickPower = clickPower + 1
+        clickUpgradeCost = math.floor(clickUpgradeCost * 2)
+        updateDisplay()
+        saveData()
+    end
+end)
+
+-- When farm button is clicked
+farmButton.MouseButton1Click:Connect(function()
+    if cookies >= farmCost then
+        cookies = cookies - farmCost
+        farms = farms + 1
+        farmCost = math.floor(farmCost * 1.8)
+        updateDisplay()
+        saveData()
+    end
+end)
+
+-- Auto-generation (Grandmas give 1/sec, Farms give 5/sec)
+spawn(function()
+    while true do
+        wait(1)
+        if grandmas > 0 or farms > 0 then
+            local generated = grandmas + (farms * 5)
+            cookies = cookies + generated
+            totalCookiesEarned = totalCookiesEarned + generated
+            checkAchievements()
+            updateDisplay()
+        end
+    end
+end)
+
+-- Auto-save every 30 seconds
+spawn(function()
+    while true do
+        wait(30)
+        saveData()
+    end
+end)
+
+-- Save when player leaves
+Players.PlayerRemoving:Connect(function(leavingPlayer)
+    if leavingPlayer == player then
+        saveData()
+    end
+end)
+
+-- Initial display update
+updateDisplay()

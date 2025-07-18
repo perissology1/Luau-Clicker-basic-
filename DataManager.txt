@@ -1,0 +1,44 @@
+-- Made by mirai. This handles the progress saving. added comments so it's easy to understand. Serverside data persistence manager. Handles loading player data on join and saving data via RemoteEvents and managing DataStore operations. Communicates with client through SaveDataEvent and LoadDataEvent RemoteEvents.
+
+local Players = game:GetService("Players")
+local DataStoreService = game:GetService("DataStoreService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local dataStore = DataStoreService:GetDataStore("CookieData")
+local saveDataEvent = ReplicatedStorage:WaitForChild("SaveDataEvent")
+local loadDataEvent = ReplicatedStorage:WaitForChild("LoadDataEvent")
+
+-- When player joins, send their saved data
+Players.PlayerAdded:Connect(function(player)
+    local success, savedData = pcall(function()
+        return dataStore:GetAsync(player.UserId)
+    end)
+    
+    if success and savedData then
+        loadDataEvent:FireClient(player, savedData)
+    else
+        -- Send default data if no save exists
+        local defaultData = {
+            cookies = 0,
+            grandmas = 0,
+            clickPower = 1,
+            grandmaCost = 10,
+            clickUpgradeCost = 50
+        }
+        loadDataEvent:FireClient(player, defaultData)
+    end
+end)
+
+-- When client wants to save data
+saveDataEvent.OnServerEvent:Connect(function(player, dataToSave)
+    pcall(function()
+        dataStore:SetAsync(player.UserId, dataToSave)
+    end)
+end)
+
+-- Save when player leaves
+Players.PlayerRemoving:Connect(function(player)
+    -- The client will send final save data before leaving
+    print(player.Name .. " left the game")
+end)
+
